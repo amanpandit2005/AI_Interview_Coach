@@ -24,7 +24,6 @@ exports.submitContact = async (req, res) => {
     const contact = await Contact.create({ name, email, type, message });
 
     // Forward inquiry via email
-    const web3formsKey = process.env.WEB3FORMS_ACCESS_KEY;
     const smtpHost = process.env.SMTP_HOST;
     const smtpPort = process.env.SMTP_PORT || 587;
     const smtpUser = process.env.SMTP_USER;
@@ -34,38 +33,7 @@ exports.submitContact = async (req, res) => {
     let emailSent = false;
     let emailError = null;
 
-    if (web3formsKey) {
-      // Forward inquiry via Web3Forms API in the background.
-      // This runs over standard HTTPS (port 443) and is never blocked by Render.
-      fetch("https://api.web3forms.com/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify({
-          access_key: web3formsKey,
-          name: name,
-          email: email,
-          subject: `[Podium Contact Form] New ${type.toUpperCase()}: ${name}`,
-          message: `Name: ${name}\nEmail: ${email}\nType: ${type.toUpperCase()}\n\nMessage:\n${message}`,
-          from_name: "Podium App"
-        })
-      })
-      .then(async (response) => {
-        const resData = await response.json();
-        if (response.ok && resData.success) {
-          console.log("Contact inquiry forwarded successfully via Web3Forms API.");
-        } else {
-          console.error("Web3Forms API error forwarding contact inquiry:", resData);
-        }
-      })
-      .catch((err) => {
-        console.error("Web3Forms network error forwarding contact inquiry:", err.message);
-      });
-
-      emailSent = true;
-    } else if (smtpHost && smtpUser && smtpPass) {
+    if (smtpHost && smtpUser && smtpPass) {
       try {
         const transporter = nodemailer.createTransport(
           smtpHost === 'smtp.gmail.com'
@@ -162,8 +130,8 @@ exports.submitContact = async (req, res) => {
         emailError = err.message;
       }
     } else {
-      console.warn("SMTP credentials and Web3Forms key not configured. Contact saved but email not forwarded.");
-      emailError = "SMTP credentials and Web3Forms key not configured on the server.";
+      console.warn("SMTP credentials not configured. Contact saved but email not forwarded via SMTP.");
+      emailError = "SMTP credentials not configured on the server.";
     }
 
     res.status(201).json({

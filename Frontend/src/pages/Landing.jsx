@@ -132,9 +132,36 @@ export default function Landing() {
     setSuccess(null);
     setError(null);
     try {
-      const response = await api.post('/contact', formData);
-      setSuccess(response.data.message || 'Thank you! Your message has been received.');
-      setFormData(prev => ({ ...prev, message: '' }));
+      // 1. Submit email via Web3Forms client-side API (allowed on Free tier)
+      const emailPromise = fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          access_key: import.meta.env.VITE_WEB3FORMS_ACCESS_KEY || '1e572bee-4d56-4281-9f58-82d65653d575',
+          name: formData.name,
+          email: formData.email,
+          subject: `[Podium Contact Form] New ${formData.type.toUpperCase()}: ${formData.name}`,
+          message: `Name: ${formData.name}\nEmail: ${formData.email}\nType: ${formData.type.toUpperCase()}\n\nMessage:\n${formData.message}`,
+          from_name: 'Podium App'
+        })
+      });
+
+      // 2. Submit to local backend to persist in MongoDB database
+      const dbPromise = api.post('/contact', formData);
+
+      // Await both promises in parallel
+      const [emailResponse, dbResponse] = await Promise.all([emailPromise, dbPromise]);
+      const emailData = await emailResponse.json();
+
+      if (emailData.success) {
+        setSuccess('Thank you! Your message has been received.');
+        setFormData(prev => ({ ...prev, message: '' }));
+      } else {
+        setError(emailData.message || 'Something went wrong. Please try again.');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
     } finally {
